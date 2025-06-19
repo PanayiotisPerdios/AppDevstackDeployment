@@ -1,0 +1,10 @@
+#cloud-config
+users:
+  - name: app
+    ssh-authorized-keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDNMcKJUBljjHbet93QygLQbJzotQ0x1IWa2O/7hP5hUjajVV2T75iW2JXYn+Ww0YiuvhPgN>
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    shell: /bin/bash
+
+package_update: true
+package_upgrade: true

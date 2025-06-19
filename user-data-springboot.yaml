@@ -1,0 +1,32 @@
+#cloud-config
+users:
+  - name: app
+    ssh-authorized-keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDNMcKJUBljjHbet93QygLQbJzotQ0x1IWa2O/7hP5hUjajVV2T75iW2JXYn+Ww0YiuvhPgNsgeIvzlcLwdlgmQq9SXwVIaUyFpQGiBj/Eh7u38oUL+2ZJhdfb70v32JKTiY4sRNg6i9HbCKNx3Ea17gs//6psM6vOP2jkvsp1AiU3nyZma2D5wiDTWyASHWKeCzATPAzsQgcPKuJMXIIFoLYVVhCiGNy8fk4fQteBmfT3sHMm8YlLFlUm1ekEO54GmN0SWMCKj2dXm/InoTbcingRsjJh6ABxsD0jMAx8v6YL/MZlIK0qWfArc9Y0c8XCNgsR+kUDHzIZvh8Ni5No9 rc@rc
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    shell: /bin/bash
+
+package_update: true
+package_upgrade: true
+
+write_files:
+  - path: /opt/app/src/main/resources/application.properties
+    content: |
+      server.port=9090
+      spring.datasource.url=jdbc:postgresql://10.0.2.15:5432/BloodDonors
+      spring.datasource.username=dbuser
+      spring.datasource.password=pass123
+      spring.jpa.generate-ddl=true
+      spring.jpa.hibernate.ddl-auto=update
+      spring.jpa.show-sql=true
+      spring.jpa.properties.hibernate.format_sql=true
+      spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+      app.jwtSecret=123esef
+      app.jwtExpirationMs=86400000
+      frontend.ip=http://vuejs:9000
+      management.endpoint.health.probes.enabled=true
+      management.health.livenessState.enabled=true
+      management.health.readinessState.enabled=true
+
+runcmd:
+  - systemctl restart app.service
