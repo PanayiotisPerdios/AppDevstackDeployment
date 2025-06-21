@@ -3,7 +3,11 @@
 set -e
 
 apt-get update
-apt-get install -y openjdk-17-jdk maven git
+apt-get install -y openjdk-17-jdk maven git openssh-server
+
+systemctl daemon-reexec
+systemctl enable ssh
+systemctl start ssh
 
 # Create app user if not exists
 id -u app &>/dev/null || useradd -m -s /bin/bash app

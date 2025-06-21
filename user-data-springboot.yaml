@@ -8,8 +8,8 @@ users:
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
     shell: /bin/bash
 
-package_update: true
-package_upgrade: true
+package_update: false
+package_upgrade: false
 
 write_files:
   - path: /opt/app/src/main/resources/application.properties
