@@ -44,6 +44,8 @@ sudo apt-get install -y genisoimage cloud-image-utils libguestfs-tools qemu-syst
 #cloud-config
 users:
   - name: app
+    lock_passwd: false
+    passwd: "$6$6txZp8OPA9b2zsBC$1TKnlatw3K99M45iAPY3x8fDHj7LgM8GCkz5OdOhp7zPjZOx0iSIzpSXH8kMK3gnVFNzHjovyE7/fsvnSXje6/"
     ssh-authorized-keys:
       - ssh-rsa AAAA…your_public_key… app@host
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
@@ -58,6 +60,8 @@ package_upgrade: true
 #cloud-config
 users:
   - name: app
+    lock_passwd: false
+    passwd: "$6$6txZp8OPA9b2zsBC$1TKnlatw3K99M45iAPY3x8fDHj7LgM8GCkz5OdOhp7zPjZOx0iSIzpSXH8kMK3gnVFNzHjovyE7/fsvnSXje6/"
     ssh-authorized-keys:
       - ssh-rsa AAAA…your_public_key… app@host
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
@@ -85,8 +89,29 @@ write_files:
       management.health.livenessState.enabled=true
       management.health.readinessState.enabled=true
 
+
 runcmd:
-  - systemctl restart app.service
+  - chown -R app:app /opt/app
+  - |
+    cat > /etc/systemd/system/app.service <<EOF
+    [Unit]
+    Description=Spring Boot App
+    After=network.target
+
+    [Service]
+    User=app
+    WorkingDirectory=/opt/app
+    ExecStart=/usr/bin/java -jar /opt/app/target/*.jar --spring.config.location=file:/opt/app/application.properties
+    SuccessExitStatus=143
+    Restart=always
+    Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+  - systemctl daemon-reload
+  - systemctl enable app.service
+  - systemctl start app.service
 
 ```
 
@@ -100,85 +125,48 @@ local-hostname: springboot
 ### Generate the NoCloud seed disk:
 
 ### for postgres db
-#### with genisoimage:
+
 ```bash
-genisoimage -output seed_springboot.iso -volid cidata -joliet -rock user-data-springboot.yaml meta-data-springboot.yaml
-```
-#### with cloud-localds
-```bash
-cloud-localds seed_springboot.iso user-data-springboot.yaml meta-data-springboot.yaml
+cloud-localds seed-springboot.iso user-data-springboot.yaml meta-data-springboot.yaml
 ```
 
-### for springboot app 
-#### with genisoimage:
 ```bash
-genisoimage -output seed_postgres.iso -volid cidata -joliet -rock user-data-postgres.yaml
+cloud-localds seed-postgres.iso user-data-postgres.yaml meta-data-postgres.yaml
 ```
-#### with cloud-localds
-```bash
-cloud-localds seed_postgres.iso user-data-postgres.yaml 
-```
+
 ### 3. Launch & test the DB image
 
 1. Bake in postgres DB setup (optional):
 ```bash
-virt-customize -a postgres-image.img --firstboot-command '
-  apt-get update &&
-  apt-get install -y postgresql-14 postgresql-client-14 &&
-  sed -i "s/#listen_addresses = .*/listen_addresses = '\''*'\''/" /etc/postgresql/14/main/postgresql.conf &&
-  echo "host all all 0.0.0.0/16 md5" >> /etc/postgresql/14/main/pg_hba.conf &&
-  systemctl daemon-reexec &&
-  systemctl enable postgresql &&
-  systemctl start postgresql &&
-  systemctl enable ssh &&
-  systemctl start ssh &&
-  sudo -u postgres psql -c '\''CREATE DATABASE "BloodDonors";'\'' &&
-  sudo -u postgres psql -c '\''CREATE USER dbuser WITH PASSWORD '\''\''pass123'\''\'';'\'' &&
-  sudo -u postgres psql -c '\''GRANT ALL PRIVILEGES ON DATABASE "BloodDonors" TO dbuser;'\'
-'
+sudo virt-customize -a postgres-image.img --firstboot scripts/./firstboot-postgres.sh
 ```
 2. Launch the postgres DB VM:
 ```bash
 qemu-system-x86_64 \
   -enable-kvm -m 2048 \
   -drive file=postgres-image.img,if=virtio,format=qcow2 \
-  -drive file=seed.iso,if=virtio,format=raw \
+  -drive file=seed-postgres.iso,if=virtio,format=raw \
   -netdev user,id=net0,hostfwd=tcp::2222-:22 \
   -device virtio-net,netdev=net0 \
   -nographic
 ```
-### 4. Launch & test the Web image
-1. Bake in Web setup (optional):
+### 4. Launch & test the Springboot image
+1. Resize springboot-image
+```bash
+qemu-img resize springboot-image.img +2G
+```
+2. Bake in Springboot setup (optional):
 
 ```bash
-virt-customize -a springboot-image.img --firstboot-command '
-  apt-get update &&
-  apt-get install -y openjdk-17-jdk maven git &&
-  git clone https://github.com/JohnSkouloudis/BloodDonorApp-Backend.git /opt/app &&
-  cd /opt/app &&
-  mvn clean install &&
-  cat > /etc/systemd/system/app.service <<EOF
-[Unit]
-Description=Spring Boot App
-After=network.target
-[Service]
-WorkingDirectory=/opt/app
-ExecStart=/usr/bin/mvn spring-boot:run
-Restart=always
-Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-[Install]
-WantedBy=multi-user.target
-EOF &&
-  systemctl daemon-reload
-'
+sudo virt-customize -a springboot-image.img --firstboot scripts/./firstboot-springboot.sh
 ```
-2. Launch the Web VM:
+3. Launch the Web VM:
 ```bash
 qemu-system-x86_64 \
   -enable-kvm -m 2048 \
-  -drive file=springboot-image.img,if=virtio,format=qcow2 \
-  -drive file=seed.iso,if=virtio,format=raw \
-  -netdev user,id=net1,hostfwd=tcp::9090-:90 \
+  -drive file=springboot-clean-image.img,if=virtio,format=qcow2 \
+  -drive file=seed-springboot.iso,if=virtio,format=raw \
+  -netdev user,id=net1,hostfwd=tcp::9090-:90,hostfwd=tcp::2223-:22 \
   -device virtio-net,netdev=net1 \
   -nographic
 ```
@@ -190,6 +178,7 @@ ssh -i ~/.ssh/id_rsa app@127.0.0.1 -p 2222
 
 ```bash
 curl http://127.0.0.1:9090/
+ssh -i ~/.ssh/id_rsa app@127.0.0.1 -p 2223
 ```
 
 ## Part II: Upload & Launch on OpenStack
