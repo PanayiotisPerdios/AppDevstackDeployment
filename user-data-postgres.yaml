@@ -1,6 +1,8 @@
 #cloud-config
 users:
   - name: app
+    lock_passwd: false
+    passwd: "$6$6txZp8OPA9b2zsBC$1TKnlatw3K99M45iAPY3x8fDHj7LgM8GCkz5OdOhp7zPjZOx0iSIzpSXH8kMK3gnVFNzHjovyE7/fsvnSXje6/"
     ssh-authorized-keys:
       - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDNMcKJUBljjHbet93QygLQbJzotQ0x1IWa2O/7hP5hUjajVV2T75iW2JXYn+Ww0YiuvhPgN>
     sudo: ['ALL=(ALL) NOPASSWD:ALL']

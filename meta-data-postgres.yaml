@@ -1,0 +1,2 @@
+instance-id: postgres-vm
+local-hostname: postgres

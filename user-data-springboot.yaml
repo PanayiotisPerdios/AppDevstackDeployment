@@ -1,6 +1,8 @@
 #cloud-config
 users:
   - name: app
+    lock_passwd: false
+    passwd: "$6$6txZp8OPA9b2zsBC$1TKnlatw3K99M45iAPY3x8fDHj7LgM8GCkz5OdOhp7zPjZOx0iSIzpSXH8kMK3gnVFNzHjovyE7/fsvnSXje6/"
     ssh-authorized-keys:
       - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDNMcKJUBljjHbet93QygLQbJzotQ0x1IWa2O/7hP5hUjajVV2T75iW2JXYn+Ww0YiuvhPgNsgeIvzlcLwdlgmQq9SXwVIaUyFpQGiBj/Eh7u38oUL+2ZJhdfb70v32JKTiY4sRNg6i9HbCKNx3Ea17gs//6psM6vOP2jkvsp1AiU3nyZma2D5wiDTWyASHWKeCzATPAzsQgcPKuJMXIIFoLYVVhCiGNy8fk4fQteBmfT3sHMm8YlLFlUm1ekEO54GmN0SWMCKj2dXm/InoTbcingRsjJh6ABxsD0jMAx8v6YL/MZlIK0qWfArc9Y0c8XCNgsR+kUDHzIZvh8Ni5No9 rc@rc
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
@@ -28,5 +30,26 @@ write_files:
       management.health.livenessState.enabled=true
       management.health.readinessState.enabled=true
 
+
 runcmd:
-  - systemctl restart app.service
+  - chown -R app:app /opt/app
+  - |
+    cat > /etc/systemd/system/app.service <<EOF
+    [Unit]
+    Description=Spring Boot App
+    After=network.target
+
+    [Service]
+    User=app
+    WorkingDirectory=/opt/app
+    ExecStart=/usr/bin/java -jar /opt/app/target/*.jar --spring.config.location=file:/opt/app/application.properties
+    SuccessExitStatus=143
+    Restart=always
+    Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+  - systemctl daemon-reload
+  - systemctl enable app.service
+  - systemctl start app.service

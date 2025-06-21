@@ -122,7 +122,7 @@ cloud-localds seed_postgres.iso user-data-postgres.yaml
 
 1. Bake in postgres DB setup (optional):
 ```bash
-virt-customize -a sql-image.img --firstboot-command '
+virt-customize -a postgres-image.img --firstboot-command '
   apt-get update &&
   apt-get install -y postgresql-14 postgresql-client-14 &&
   sed -i "s/#listen_addresses = .*/listen_addresses = '\''*'\''/" /etc/postgresql/14/main/postgresql.conf &&
@@ -132,11 +132,9 @@ virt-customize -a sql-image.img --firstboot-command '
   systemctl start postgresql &&
   systemctl enable ssh &&
   systemctl start ssh &&
-  sudo -u postgres psql <<EOF
-CREATE DATABASE "BloodDonors";
-CREATE USER dbuser WITH PASSWORD '\''pass123'\'';
-GRANT ALL PRIVILEGES ON DATABASE "BloodDonors" TO dbuser;
-EOF
+  sudo -u postgres psql -c '\''CREATE DATABASE "BloodDonors";'\'' &&
+  sudo -u postgres psql -c '\''CREATE USER dbuser WITH PASSWORD '\''\''pass123'\''\'';'\'' &&
+  sudo -u postgres psql -c '\''GRANT ALL PRIVILEGES ON DATABASE "BloodDonors" TO dbuser;'\'
 '
 ```
 2. Launch the postgres DB VM:
