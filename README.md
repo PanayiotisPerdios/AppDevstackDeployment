@@ -1,208 +1,195 @@
-# Local Testing & OpenStack Deployment of DB + Web VM Images
+# AppDevstackDeployment
 
-## Prerequisites
+## 1) Prerequisites
 
-- **Host** with QEMU & KVM (or use `-machine accel=tcg` if `/dev/kvm` is busy)  
-- **cloud-image-utils** (for `cloud-localds`)  
-- **libguestfs-tools** (for `virt-customize`)  
-- **OpenStack** cloud & `openstack` CLI  
-- **SSH** keypair on host (`~/.ssh/id_rsa` + `id_rsa.pub`)
+### We assume we have an installed ubuntu VM with 2 Adapters
+1. NAT (for internet access)
+2. Host-only network (for the floating-IPs later, range 192.168.56.0/24) 
 
----
+### We'll also be using this netplan config
+Edit `/etc/netplan/10-enp0s8-static.yaml`:
 
-## Part 0: Download & Prepare Base Images
-
-1. **Download official Ubuntu Jammy Cloud Image**  
-   ```bash
-   wget https://cloud-images.ubuntu.com/jammy/20250429/jammy-server-cloudimg-amd64.img \
-     -O base-image.qcow2
-    ```
-2. Convert (if needed) & duplicate for DB/Web
 ```bash
-# Ensure QCOW2 format
-qemu-img convert -f qcow2 -O qcow2 base-image.qcow2 base-image-fixed.qcow2
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp0s8:
+      dhcp4: false
+      addresses: [192.168.56.10/24]
+      nameservers:
+        addresses: [8.8.8.8,8.8.4.4]
 ```
-```bash
-#Create two working images
-cp base-image-fixed.qcow2 postgres-image.img
-cp base-image-fixed.qcow2 springboot-image.img
-```
+## 2) Devstack installation
 
-## Part I: Local QEMU Testing
-### 1. Install Dependencies
+### Add the `stack` user and give the necessary permissions
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y genisoimage cloud-image-utils libguestfs-tools qemu-system-x86
+sudo useradd -s /bin/bash -d /opt/stack -m stack
+sudo chmod +x /opt/stack
 ```
 
-### 2. Prepare `user-data-postgres.yml` & `meta-data-springboot.yml` & `user-data-springboot.yml`
+### Since this user will be making many changes to your system, it should have sudo privileges:
 
-#### user-data-postgres.yml
-
-```bash
-#cloud-config
-users:
-  - name: app
-    lock_passwd: false
-    passwd: "$6$6txZp8OPA9b2zsBC$1TKnlatw3K99M45iAPY3x8fDHj7LgM8GCkz5OdOhp7zPjZOx0iSIzpSXH8kMK3gnVFNzHjovyE7/fsvnSXje6/"
-    ssh-authorized-keys:
-      - ssh-rsa AAAA…your_public_key… app@host
-    sudo: ['ALL=(ALL) NOPASSWD:ALL']
-    shell: /bin/bash
-
-package_update: true
-package_upgrade: true
+```bash 
+echo "stack ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/stack
+sudo -u stack -i
 ```
 
-#### user-data-springboot.yml
+### Install Git and download DevStack
+
 ```bash
-#cloud-config
-users:
-  - name: app
-    lock_passwd: false
-    passwd: "$6$6txZp8OPA9b2zsBC$1TKnlatw3K99M45iAPY3x8fDHj7LgM8GCkz5OdOhp7zPjZOx0iSIzpSXH8kMK3gnVFNzHjovyE7/fsvnSXje6/"
-    ssh-authorized-keys:
-      - ssh-rsa AAAA…your_public_key… app@host
-    sudo: ['ALL=(ALL) NOPASSWD:ALL']
-    shell: /bin/bash
-
-package_update: true
-package_upgrade: true
-
-write_files:
-  - path: /opt/app/src/main/resources/application.properties
-    content: |
-      server.port=9090
-      spring.datasource.url=jdbc:postgresql://10.0.2.15:5432/BloodDonors
-      spring.datasource.username=dbuser
-      spring.datasource.password=pass123
-      spring.jpa.generate-ddl=true
-      spring.jpa.hibernate.ddl-auto=update
-      spring.jpa.show-sql=true
-      spring.jpa.properties.hibernate.format_sql=true
-      spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
-      app.jwtSecret=123esef
-      app.jwtExpirationMs=86400000
-      frontend.ip=http://vuejs:9000
-      management.endpoint.health.probes.enabled=true
-      management.health.livenessState.enabled=true
-      management.health.readinessState.enabled=true
-
-
-runcmd:
-  - chown -R app:app /opt/app
-  - |
-    cat > /etc/systemd/system/app.service <<EOF
-    [Unit]
-    Description=Spring Boot App
-    After=network.target
-
-    [Service]
-    User=app
-    WorkingDirectory=/opt/app
-    ExecStart=/usr/bin/java -jar /opt/app/target/*.jar --spring.config.location=file:/opt/app/application.properties
-    SuccessExitStatus=143
-    Restart=always
-    Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-
-    [Install]
-    WantedBy=multi-user.target
-    EOF
-  - systemctl daemon-reload
-  - systemctl enable app.service
-  - systemctl start app.service
-
+sudo apt-get install git -y
+git clone https://opendev.org/openstack/devstack
+```
+### Git clone project and copy `local.conf`
+```bash
+git clone https://github.com/PanayiotisPerdios/AppDevstackDeployment.git
+sudo cp AppDevstackDeployment/local.conf devstack/
+```
+### Start the devstack install
+```bash
+cd devstack
+./stack.sh
 ```
 
-#### meta-data-postgres.yml
+## 3) Devstack setup/configuration
+
+### Source in as admin
+```bash
+source ~/devstack/openrc admin
+```
+### Create a project
+```bash
+openstack project create \
+  --domain default \
+  --description "Web App Project" \
+  web_app
+```
+### Create a user on the project you created and give him the admin role
 
 ```bash
-instance-id: springboot-vm
-local-hostname: springboot
+openstack user create --domain default --project web_app --password webpass webadmin1
+openstack role add --project web_app --user webadmin1 admin
+```
+### Download `web_app-openrc` file from Horizon then source it
+
+```bash
+source web_app-openrc
 ```
 
-### Generate the NoCloud seed disk:
+### Creat a private network
+```bash
+openstack network create web_private
+```
 
-### for postgres db
+### Create a subnet on the private network
+```bash
+openstack subnet create \
+  --network web_private \
+  --subnet-range 10.0.0.0/24 \
+  --dns-nameserver 8.8.8.8 \
+  --dns-nameserver 8.8.4.4 \
+ web_private_subnet
+```
+
+### Create a router and connect it between your public and private network
+```bash
+openstack router create web_router
+```
+```bash
+openstack router set web_router --external-gateway public
+```
+```bash
+openstack router add subnet web_router web_private_subnet
+```
+
+### Now the network topology should look like this:
+
+![Alt Text](./network-topology1.png)
+
+### Add a security group and it's rules for the postgres instance 
 
 ```bash
-cloud-localds seed-springboot.iso user-data-springboot.yaml meta-data-springboot.yaml
+openstack security group create postgres-sg --description "Postgres Security Group"
+```
+```bash
+# Allow SSH from host-only network
+openstack security group rule create postgres-sg \
+  --protocol tcp --dst-port 22 \
+  --ingress --remote-ip 192.168.56.0/24
 ```
 
 ```bash
-cloud-localds seed-postgres.iso user-data-postgres.yaml meta-data-postgres.yaml
-```
-
-### 3. Launch & test the DB image
-
-1. Bake in postgres DB setup (optional):
-```bash
-sudo virt-customize -a postgres-image.img --firstboot scripts/./firstboot-postgres.sh
-```
-2. Launch the postgres DB VM:
-```bash
-qemu-system-x86_64 \
-  -enable-kvm -m 2048 \
-  -drive file=postgres-image.img,if=virtio,format=qcow2 \
-  -drive file=seed-postgres.iso,if=virtio,format=raw \
-  -netdev user,id=net0,hostfwd=tcp::2222-:22 \
-  -device virtio-net,netdev=net0 \
-  -nographic
-```
-### 4. Launch & test the Springboot image
-1. Resize springboot-image
-```bash
-qemu-img resize springboot-image.img +2G
-```
-2. Bake in Springboot setup (optional):
-
-```bash
-sudo virt-customize -a springboot-image.img --firstboot scripts/./firstboot-springboot.sh
-```
-3. Launch the Web VM:
-```bash
-qemu-system-x86_64 \
-  -enable-kvm -m 2048 \
-  -drive file=springboot-clean-image.img,if=virtio,format=qcow2 \
-  -drive file=seed-springboot.iso,if=virtio,format=raw \
-  -netdev user,id=net1,hostfwd=tcp::9090-:90,hostfwd=tcp::2223-:22 \
-  -device virtio-net,netdev=net1 \
-  -nographic
-```
-
-### 5. SSH / HTTP into your VMs
-```bash
-ssh -i ~/.ssh/id_rsa app@127.0.0.1 -p 2222
+# Allow PostgreSQL traffic from private subnet
+openstack security group rule create postgres-sg \
+  --protocol tcp --dst-port 5432 \
+  --ingress --remote-ip 10.0.0.0/24
 ```
 
 ```bash
-curl http://127.0.0.1:9090/
-ssh -i ~/.ssh/id_rsa app@127.0.0.1 -p 2223
+# Allow all egress (it exists by default but explicitly if needed)
+openstack security group rule create postgres-sg \
+  --egress --protocol any --remote-ip 0.0.0.0/0
 ```
 
-## Part II: Upload & Launch on OpenStack
+### Add a security group and it's rules for the springboot instance 
 
-### 1. Upload to Glance
 ```bash
-openstack image create --disk-format qcow2 --container-format bare --public postgres-image.img
-openstack image create --disk-format qcow2 --container-format bare --public springboot-image.img
+openstack security group create springboot-sg --description "Springboot Security Group"
 ```
 
-### 2. Launch Instances
 ```bash
-openstack server create --flavor m1.small \
-  --image postgres-image --network app_net db-vm
-
-openstack server create --flavor m1.small \
-  --image springboot-image --network app_net web-vm
+# Allow SSH from host-only network
+openstack security group rule create springboot-sg \
+  --protocol tcp --dst-port 22 \
+  --ingress --remote-ip 192.168.56.0/24
 ```
-### 3. Assign Floating IPs & Test
-```bash
-FIP_DB=$(openstack floating ip create public -f value -c floating_ip_address)
-openstack server add floating ip db-vm $FIP_DB
-ssh -i ~/.ssh/id_rsa app@$FIP_DB
 
-FIP_WEB=$(openstack floating ip create public -f value -c floating_ip_address)
-openstack server add floating ip web-vm $FIP_WEB
-curl http://$FIP_WEB/
+```bash
+# Allow HTTP port 9090 from anywhere (0.0.0.0/0)
+openstack security group rule create springboot-sg \
+  --protocol tcp --dst-port 9090 \
+  --ingress --remote-ip 0.0.0.0/0
+```
+
+```bash
+# Allow all egress (it exists by default but explicitly if needed)
+openstack security group rule create springboot-sg \
+  --egress --protocol any --remote-ip 0.0.0.0/0
+```
+### Setup and upload images
+  by following the guide here: ([image_setup.md](image_setup.md))
+
+### Create floating ip and assign it to the springboot instance
+```bash
+openstack floating ip create public
+openstack server add floating ip springboot-image
+
+```
+
+![Alt Text](./devstack-network.png)
+
+
+### SSH tunneling to postgres db since it doesnt have a floating ip
+```bash
+ssh -L 5432:10.0.0.77:5432 app@192.168.56.101
+```
+![Alt Text](./ssh-tunneling.png)
+
+## 4) Monitoring with Ceilometer
+
+```bash
+openstack metric resource list --type instance
+```
+```bash
+openstack metric measures show \
+  --resource-id <instance_id> \
+  cpu_util
+```
+
+```bash
+openstack metric measures show \
+  --resource-id <instance_id> \
+  memory.usage
+```

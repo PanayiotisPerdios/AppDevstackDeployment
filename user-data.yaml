@@ -1,0 +1,10 @@
+#cloud-config
+users:
+  - name: app
+    ssh-authorized-keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDcCxUMErzEY+NHGepXCejPG2Ud/g1jfXaK6HFtly6WzyEnvXRLDIpr1mqDhuX0oPtKuO89OnsINiCGpAvdHRYrP6qwuSsuG+TtgM7dvTFEcsLt3v0uFHOkoB8lHjlXvy+E6ey1FzIOavrigyzUVSaXJgAHBBwxQmGIoTUYQUuR3GUA9sgcTlJdHbwxepyE3+xDFXEi65bhZ388OLvWMs3F4rgRndxMbzpkuEFgoyPt3wgcV2UDOl1UzAOoG/jJqGryU/T46pkOXD6WQHHMo1SJJEs7C119O4BcXarirOGXmaXXZ41X5d1+CZZafXzy53YhzDYQfzZfQdqF/EVQW9B/Y9rAdj2XFBLp/5HM9HUZJu67NHXhk6XnHPROU/ncVvgFLD343mejZxe+u5gIS286beYrED4X5SgZSnvf66IelbT2w0XeuS9goMQhZQWvv32sy12blr6MNXl3nH8wWPdtbtobHGF2xYP02lPbfmC6CEVB0dw4rD8ViTMqG/qFlFEEVw0s1Lv0l/GGn3onzfoNAMVbaAu9MJzDAcjKSk31RZgvWlGEMK6/XOPst6+v8NYlolkPnj3H6m37cs8mUCUdlEUIR93g6c/RcmMI1o/KqS2z0gcEk0io0RmOP+5SD2WCKvcCFN6I/yTcDq7bpClV2Kq8CCf2b3E4IoXbwcULjQ== rc@rc-LOQ-15ARP9
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    shell: /bin/bash
+
+package_update: true
+package_upgrade: true
