@@ -14,7 +14,7 @@
 
 1. **Download official Ubuntu Jammy Cloud Image**  
    ```bash
-   wget https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img -O base-image.qcow2
+   wget https://cloud-images.ubuntu.com/jammy/20250516/jammy-server-cloudimg-amd64.img -O base-image.qcow2
     ```
 2. Convert (if needed) & duplicate for DB/Web
 
@@ -126,22 +126,16 @@ local-hostname: springboot
 
 ### Generate the NoCloud seed disk:
 
-### for springboot app
-
-```bash
-cloud-localds seed-springboot.iso user-data-springboot.yaml meta-data-springboot.yaml
-```
-### for postgres db
-
-```bash
-cloud-localds seed-postgres.iso user-data.yaml meta-data-postgres.yaml
-```
 ### for web flask app
 ```bash
 cloud-localds seed-web-flask.iso user-data.yaml
 ```
 
 ### 3. Launch & test the DB image
+1. Resize postgres-image
+```bash
+qemu-img resize postgres-image.img +2G
+```
 
 1. Bake in postgres DB setup (optional):
 ```bash
@@ -172,19 +166,29 @@ sudo virt-customize -a springboot-image.img --firstboot scripts/./firstboot-spri
 qemu-system-x86_64 \
   -enable-kvm -m 2048 \
   -drive file=springboot-image.img,if=virtio,format=qcow2 \
-  -drive file=seed-springboot.iso,if=virtio,format=raw \
+  -drive file=seed-postgres.iso,if=virtio,format=raw \
   -netdev user,id=net1,hostfwd=tcp::9090-:90,hostfwd=tcp::2223-:22 \
   -device virtio-net,netdev=net1 \
   -nographic
 ```
+we gonna use the actual cloud-init config `user-data-springboot` later 
+
+4. Cleanup the dummy cloud-init(making it look like it runs for the first time)
+```bash
+cloud-init clean --logs
+```
 
 ### 5. Launch & test the Web image
-1. Bake in Web Flask setup:
+1. Resize web-flask-image
+```bash
+qemu-img resize web-flask-image.img +1G
+```
+2. Bake in Web Flask setup:
 
 ```bash
 sudo virt-customize -a web-flask-image.img --firstboot scripts/./firstboot-web-flask.sh
 ```
-2. Launch the Web Flask VM:
+3. Launch the Web Flask VM:
 ```bash
 qemu-system-x86_64 \
   -enable-kvm -m 2048 \
@@ -205,8 +209,6 @@ qemu-system-x86_64 \
 curl http://127.0.0.1:9090/
 ssh -i ~/.ssh/id_rsa app@127.0.0.1 -p 2223
 ```
-
-systemctl status app.service
 
 ### for postgres db
 
@@ -260,6 +262,8 @@ openstack server create \
   --image springboot-image \
   --network web_private \
   --security-group springboot-sg \
+  --key-name my-ssh-key \
+  --user-data user-data-springboot.yaml \
   springboot-vm
 ```
 
@@ -271,6 +275,7 @@ openstack server create \
   --image postgres-image \
   --network web_private \
   --security-group postgres-sg \
+  --key-name my-ssh-key \
   psql-vm
 ```
 
@@ -282,6 +287,7 @@ openstack server create \
   --image web-flask-image \
   --network web_private \
   --security-group web-flask-sg \
+  --key-name my-ssh-key \
   web-flask-vm
 ```
 
@@ -310,13 +316,3 @@ FIP_WEB=$(openstack floating ip create public -f value -c floating_ip_address)
 openstack server add floating ip web-flask-vm $FIP_WEB
 curl http://$FIP_WEB/
 ```
-scp postgres-image.img devstack@192.168.56.10:/home/devstack
-
-sudo mv postgres-image.img /opt/stack/
-
-qemu-system-x86_64 \
-  -enable-kvm -m 2048 \
-  -drive file=springboot-image.img,if=virtio,format=qcow2 \
-  -netdev user,id=net1,hostfwd=tcp::9090-:90,hostfwd=tcp::2223-:22 \
-  -device virtio-net,netdev=net1 \
-  -nographic
