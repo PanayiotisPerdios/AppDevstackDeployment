@@ -159,32 +159,6 @@ openstack security group rule create springboot-sg \
   --egress --protocol any --remote-ip 0.0.0.0/0
 ```
 
-### Add a security group and it's rules for the web-flask-app 
-
-```bash
-openstack security group create web-flask-app-sg --description "Web-Flask-App Security Group"
-```
-
-```bash
-# Allow SSH from host-only network
-openstack security group rule create web-flask-app-sg \
-  --protocol tcp --dst-port 22 \
-  --ingress --remote-ip 192.168.56.0/24
-```
-
-```bash
-# Allow HTTP port 9090 from anywhere (0.0.0.0/0)
-openstack security group rule create web-flask-app-sg \
-  --protocol tcp --dst-port 8080 \
-  --ingress --remote-ip 0.0.0.0/0
-```
-
-```bash
-# Allow all egress (it exists by default but explicitly if needed)
-openstack security group rule create web-flask-app-sg \
-  --egress --protocol any --remote-ip 0.0.0.0/0
-```
-
 ### Setup and upload images
   by following the guide here: ([image_setup.md](image_setup.md))
 
@@ -199,9 +173,9 @@ openstack server add floating ip springboot-image
 ## 4) Setup SSH tunnel with ProxyJump to postgres db 
 
 We should avoid assigning a floating ip so we will use an ssh tunnel to acces the db
-### Copy your private SSH devstack key to the web-flask-app insatnce
+### Copy your private SSH devstack key to the springboot-app insatnce
 ```bash
-scp -i .ssh/id_rsa .ssh/id_rsa app@<web-flask-app-floating-ip>:/home/app/.ssh/id_rsa
+scp -i .ssh/id_rsa .ssh/id_rsa app@<springboot-app-floating-ip>:/home/app/.ssh/id_rsa
 ```
 ### Give the neccessery permission
 ```bash
