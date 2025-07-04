@@ -1,0 +1,15 @@
+#cloud-config
+users:
+  - name: app
+    ssh-authorized-keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDUbHXUpqeS+NtkwZakrtZ72TO186QKjFuEG+Zew1TVa1CQ38SBKdpZRc8uanHmQjeODs9UbdFUNl8HRPBw+iHEQy9aZYDeup87rpF8kdvO57IoKRMc0kLEHDQV/v8RQRIdx2j/J5JdvQHkZe3RZm6pbdQTn1WMQ/JoYEgvNaNmsyiV7N+e6VgHTWeZ5ZCtVY6YuVgHW/T5sJsStKEBEcP/2rU10kTFIl4p4OjfPHTpudaXd7qSIXLzzsxaFGgTlwiNU5SuMvDaQYYZGDejz/jT5ctDrSY/dfQEnTrFnXi2bKGi22L/FeH4y8vvpTvL1E+kX8hJ0GhroIvT/BPjL4Wip4VYS+vR8BKTQIdkIlEtMCiFAxoB8YihFXroYhiQp2ul8SMw/3Rr5+0wPbLjUo8Zw1Y2xMpx2Tl4cQYwALrHAwIKRZh6tLH6lQ2Dac1YcVw8rE/yHQXKYEarSyRM6h/J4ubM2T8Q2db58qmLqmwwGOlIR7AQvN64OUwA99qCkGMp7jj61Tygh1fuwyhOBFYK2pe84HRVHDjlCiR1wX13hs9ZimHYqayg+BL6s0nvuL+S4R6wJmKLwVPdgH4IAKqEBGNKBfQoc0eKJTJ/WF/2hgGPppwAr9aRN/T3JgRD9S8uZ2EhyIB1jDZsbQObmx/9levcQdkWUKa7KrEbE3Nm2w== stack@devstack-rc
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    shell: /bin/bash
+
+package_update: true
+package_upgrade: true
+
+runcmd:
+  - echo '# Allow Spring Boot VM to connect' >> /etc/postgresql/14/main/pg_hba.conf
+  - echo 'host    BloodDonors     dbuser          10.0.0.0/24           md5' >> /etc/postgresql/14/main/pg_hba.conf
+  - systemctl restart postgresql

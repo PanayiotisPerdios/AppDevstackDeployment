@@ -117,7 +117,7 @@ openstack security group create postgres-sg --description "Postgres Security Gro
 # Allow SSH from host-only network
 openstack security group rule create postgres-sg \
   --protocol tcp --dst-port 22 \
-  --ingress --remote-ip 192.168.56.0/24
+  --ingress --remote-ip 10.0.0.0/24
 ```
 
 ```bash
@@ -158,6 +158,33 @@ openstack security group rule create springboot-sg \
 openstack security group rule create springboot-sg \
   --egress --protocol any --remote-ip 0.0.0.0/0
 ```
+
+### Add a security group and it's rules for the web-flask-app 
+
+```bash
+openstack security group create web-flask-app-sg --description "Web-Flask-App Security Group"
+```
+
+```bash
+# Allow SSH from host-only network
+openstack security group rule create web-flask-app-sg \
+  --protocol tcp --dst-port 22 \
+  --ingress --remote-ip 192.168.56.0/24
+```
+
+```bash
+# Allow HTTP port 9090 from anywhere (0.0.0.0/0)
+openstack security group rule create web-flask-app-sg \
+  --protocol tcp --dst-port 8080 \
+  --ingress --remote-ip 0.0.0.0/0
+```
+
+```bash
+# Allow all egress (it exists by default but explicitly if needed)
+openstack security group rule create web-flask-app-sg \
+  --egress --protocol any --remote-ip 0.0.0.0/0
+```
+
 ### Setup and upload images
   by following the guide here: ([image_setup.md](image_setup.md))
 
@@ -165,31 +192,100 @@ openstack security group rule create springboot-sg \
 ```bash
 openstack floating ip create public
 openstack server add floating ip springboot-image
-
 ```
 
 ![Alt Text](./devstack-network.png)
 
+## 4) Setup SSH tunnel with ProxyJump to postgres db 
 
-### SSH tunneling to postgres db since it doesnt have a floating ip
+We should avoid assigning a floating ip so we will use an ssh tunnel to acces the db
+### Copy your private SSH devstack key to the web-flask-app insatnce
 ```bash
-ssh -L 5432:10.0.0.77:5432 app@192.168.56.101
+scp -i .ssh/id_rsa .ssh/id_rsa app@<web-flask-app-floating-ip>:/home/app/.ssh/id_rsa
 ```
-![Alt Text](./ssh-tunneling.png)
+### Give the neccessery permission
+```bash
+chmod 600 ~/.ssh/id_rsa
+```
+### Setup the `.ssh/config` 
+```bash
+Host springboot-app
+    HostName <springboot-app-floating-ip>
+    User app
+    IdentityFile ~/.ssh/instance
 
-## 4) Monitoring with Ceilometer
+Host postgres-db
+    HostName <postgres-private-ip>
+    User app
+    IdentityFile ~/.ssh/instance
+    ProxyJump springboot-app
+```
 
+### Then we run
+```bash
+ssh -L 1234:10.0.0.61:5432 postgres-db
+```
+
+#### Access the db from inside the postgres instance
+```bash
+psql -h localhost -p 5432 -U dbuser -d BloodDonors
+``` 
+
+![Alt Text](./ssh-tunneling-proxyjump.png)
+
+## 5) Monitoring instances with Ceilometer
+
+### Copy the ID of the instance
+```bash
+openstack server list
+```
+### Then run the following command for both instances to display their resources
+```bash
+openstack metric resource list | grep <instance-id>
+openstack metric resource show  <instance-id>
+```
 ```bash
 openstack metric resource list --type instance
 ```
+### You can also check individual information for each resource, like `cpu_util` and `memory.usage` etc
 ```bash
 openstack metric measures show \
-  --resource-id <instance_id> \
+  --resource-id <instance-id> \
   cpu_util
 ```
 
 ```bash
 openstack metric measures show \
-  --resource-id <instance_id> \
+  --resource-id <instance-id> \
   memory.usage
 ```
+
+# Troubleshooting
+
+## Common Errors
+
+### If for whatever reason your springboot app cant communicate with your postgres instance, at the end of the file `/etc/postgresql/14/main/pg_hba.conf` add this line
+```bash
+# Allow Spring Boot VM to connect
+host    BloodDonors     dbuser          <springboot-app-private-ip>/32           md5
+```
+
+## Helpful commands
+
+### Inside the postgres instance,run this to check if the db and user have been created succesfully
+```bash
+sudo -u postgres psql -c "\du"
+sudo -u postgres psql -c "\l"
+```
+
+### Inside the springboot instance,run this to check if the service is running nad is healthy
+```bash
+sudo systemctl status app.service
+```
+
+### Also if it the service fails use this command to check the logs 
+```bash
+journalctl -u app.service
+```
+
+
