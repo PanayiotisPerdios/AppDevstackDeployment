@@ -1,4 +1,4 @@
-# Local Testing & OpenStack Deployment of DB + Web VM Images
+# OpenStack Deployment of Postgres DB and Springboot VM Images
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ cp base-image-fixed.qcow2 web-flask.img
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y genisoimage cloud-image-utils libguestfs-tools qemu-system-x86 whois
+sudo apt-get install -y genisoimage cloud-image-utils libguestfs-tools qemu-system-x86
 ```
 
 ### 2. Prepare `user-data.yml` & `meta-data-postgres.yml` & `meta-data-springboot.yml` & `user-data-postgres.yml`
