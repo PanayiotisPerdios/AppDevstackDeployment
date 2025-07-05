@@ -162,10 +162,10 @@ openstack security group rule create springboot-sg \
 ### Setup and upload images
   by following the guide here: ([image_setup.md](image_setup.md))
 
-### Create floating ip and assign it to the springboot instance
+### Create a floating ip and assign it to the springboot instance
 ```bash
 openstack floating ip create public
-openstack server add floating ip springboot-image
+openstack server add floating ip springboot-vm <floating-192.168.56.180ip-you-created>
 ```
 
 ![Alt Text](./devstack-network.png)
