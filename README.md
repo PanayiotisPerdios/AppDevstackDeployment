@@ -238,7 +238,7 @@ openstack metric measures show \
 
 ## Common Errors
 
-### If for whatever reason your springboot app cant communicate with your postgres instance, at the end of the file `/etc/postgresql/14/main/pg_hba.conf` add this line
+### If for whatever reason your springboot app can't communicate with your postgres instance, at the end of the file `/etc/postgresql/14/main/pg_hba.conf` add this line
 ```bash
 # Allow Spring Boot VM to connect
 host    BloodDonors     dbuser          <springboot-app-private-ip>/32           md5
@@ -252,7 +252,7 @@ sudo -u postgres psql -c "\du"
 sudo -u postgres psql -c "\l"
 ```
 
-### Inside the springboot instance,run this to check if the service is running nad is healthy
+### Inside the springboot instance,run this to check if the service is running and is healthy
 ```bash
 sudo systemctl status app.service
 ```
